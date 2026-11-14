@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Backsleeve</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Figtree:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;800&family=Oswald:wght@400;500;700&family=Bebas+Neue&family=Playfair+Display:wght@400;600;700&family=DM+Serif+Display&family=Space+Mono:wght@400;700&family=Mrs+Saint+Delafield&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: sticky poster preview on the left, tabbed controls on the right.
+   On a phone the poster sits on top and the controls follow.
+   One dark "darkroom" theme. The accent colour is pulled from the album cover. */
+:root {
+  --bg: #0f1013;
+  --panel: #17191e;
+  --panel-2: #20232a;
+  --line: #2f333c;
+  --text: #efede8;
+  --muted: #9b9da6;
+  --accent: #ffb14a;
+  --accent-ink: #1b1200;
+  --danger: #ff8a7a;
+  --display: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--body); -webkit-text-size-adjust: 100%; }
+body { min-height: 100%; padding-bottom: env(safe-area-inset-bottom); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; padding: calc(16px + env(safe-area-inset-top)) 16px 4px; max-width: 1120px; margin: 0 auto; }
+.brand { font: 800 24px/1 var(--display); letter-spacing: -0.02em; }
+.brand::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); margin-right: 8px; box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--accent); }
+.tag { margin: 0; color: var(--muted); font-size: 14px; }
+
+.app { display: grid; grid-template-columns: 1fr; gap: 18px; max-width: 1120px; margin: 0 auto; padding: 12px 16px 48px; }
+@media (min-width: 900px) {
+  .app { grid-template-columns: minmax(360px, 1fr) 430px; align-items: start; gap: 28px; }
+  .stage { position: sticky; top: 16px; }
+}
+
+.stage { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.frame { width: min(100%, 540px, calc(76vh / var(--r, 1.25))); background: #000; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); line-height: 0; }
+.frame canvas { width: 100%; height: auto; display: block; }
+.stagebar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; width: min(100%, 540px); }
+.stagebar small { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.note { width: min(100%, 540px); margin: 0; font-size: 13px; color: var(--danger); min-height: 0; }
+.note:empty { display: none; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.tabs { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.tab { background: none; border: 0; padding: 14px 4px 12px; font-weight: 600; font-size: 14px; color: var(--muted); border-bottom: 3px solid transparent; }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.pane { padding: 18px 16px 20px; display: none; flex-direction: column; gap: 16px; }
+.pane.on { display: flex; }
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > label, .lbl { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+input[type="text"], input[type="url"], select, textarea {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; font-size: 16px; min-width: 0;
+}
+textarea { min-height: 220px; resize: vertical; line-height: 1.5; }
+.inline { display: flex; gap: 8px; }
+.inline > input { flex: 1; }
+
+.btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 12px; padding: 12px 16px; font-weight: 700; white-space: nowrap; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn:disabled { opacity: 0.55; cursor: progress; }
+
+.status { margin: 0; font-size: 14px; color: var(--muted); min-height: 20px; }
+.status[data-kind="err"] { color: var(--danger); }
+.status[data-kind="ok"] { color: var(--text); }
+.hint { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
+
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: none; padding: 10px 8px; border-radius: 9px; font-weight: 700; font-size: 14px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; }
+.slider label { font-size: 14px; font-weight: 600; }
+.slider output { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.slider input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); height: 32px; margin: 0; }
+
+.fonts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.fonts button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; font-size: 17px; text-align: left; }
+.fonts button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.toggles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.toggles button { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 13px 12px; font-weight: 600; font-size: 14px; text-align: left; }
+.toggles button .st { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.toggles button[aria-pressed="true"] { border-color: var(--accent); }
+.toggles button[aria-pressed="true"] .st { color: var(--accent); }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatches button { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--line); padding: 0; }
+.pickers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.picker { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.picker input[type="color"] { width: 100%; height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); padding: 3px; }
+
+.overlay { position: fixed; inset: 0; background: rgba(5, 6, 8, 0.86); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+.overlay[hidden] { display: none; }
+.sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; width: min(100%, 460px); max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.sheet img { width: 100%; max-height: 56vh; object-fit: contain; background: #000; -webkit-touch-callout: default; }
+.sheet .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.sheet .row > * { flex: 1; text-align: center; text-decoration: none; }
+a.btn { color: inherit; display: inline-block; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .tab, .btn { transition: background 0.15s, color 0.15s; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Backsleeve</div>
+  <p class="tag">Paste a Spotify album link and get a print-ready poster.</p>
+</header>
+
+<main class="app">
+  <section class="stage" aria-label="Poster preview">
+    <div class="frame" id="frame"><canvas id="poster" aria-label="Poster preview"></canvas></div>
+    <p class="note" id="stageNote" role="status"></p>
+    <div class="stagebar">
+      <small id="sizeNote"></small>
+      <button class="btn primary" id="btnDownload" type="button">Download PNG</button>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Poster controls">
+    <div class="tabs" role="tablist" id="tabs">
+      <button class="tab" role="tab" type="button" data-tab="create" aria-selected="true">Create</button>
+      <button class="tab" role="tab" type="button" data-tab="edit" aria-selected="false">Edit</button>
+      <button class="tab" role="tab" type="button" data-tab="layout" aria-selected="false">Layout</button>
+      <button class="tab" role="tab" type="button" data-tab="color" aria-selected="false">Color</button>
+      <button class="tab" role="tab" type="button" data-tab="toggles" aria-selected="false">Toggles</button>
+    </div>
+
+    <div class="pane on" data-pane="create">
+      <div class="field">
+        <label for="link">Spotify album link</label>
+        <div class="inline">
+          <input type="text" id="link" inputmode="url" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="https://open.spotify.com/album/...">
+          <button class="btn primary" id="btnCreate" type="button">Create</button>
+        </div>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <p class="hint">Works with open.spotify.com links, spotify:album: URIs, short spotify.link share links and the bare 22 character ID.</p>
+      <div class="field">
+        <span class="lbl">Template</span>
+        <div class="seg" id="tplSeg">
+          <button type="button" data-tpl="classic" aria-pressed="true">Classic</button>
+          <button type="button" data-tpl="modern" aria-pressed="false">Modern</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="codeBox">Poster code</label>
+        <div class="inline">
+          <input type="text" id="codeBox" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Paste a code to load a poster">
+        </div>
+        <div class="inline">
+          <button class="btn" id="btnCopyCode" type="button" style="flex:1">Copy code</button>
+          <button class="btn" id="btnLoadCode" type="button" style="flex:1">Load code</button>
+        </div>
+        <p class="hint">A code holds your text and style choices, so you can come back to a poster later. Cover art is fetched again from the Spotify link. Covers you uploaded are not stored.</p>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="edit">
+      <div class="field"><label for="eTitle">Album title</label><input type="text" id="eTitle" autocomplete="off"></div>
+      <div class="field"><label for="eArtist">Artist</label><input type="text" id="eArtist" autocomplete="off"></div>
+      <div class="field"><label for="eYear">Year</label><input type="text" id="eYear" inputmode="numeric" maxlength="4" autocomplete="off"></div>
+      <div class="field"><label for="eTracks">Tracklist (one track per line)</label><textarea id="eTracks" spellcheck="false"></textarea></div>
+      <div class="field">
+        <span class="lbl">Cover art</span>
+        <div class="inline">
+          <button class="btn" id="btnCover" type="button" style="flex:1">Upload a cover</button>
+          <button class="btn" id="btnCoverReset" type="button" style="flex:1" hidden>Use Spotify cover</button>
+        </div>
+        <input type="file" id="coverFile" accept="image/*" hidden>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="layout">
+      <div class="field"><label for="ratio">Poster size</label><select id="ratio"></select></div>
+      <div id="sliders" style="display:flex;flex-direction:column;gap:10px"></div>
+      <div class="field"><span class="lbl">Font</span><div class="fonts" id="fonts"></div></div>
+    </div>
+
+    <div class="pane" data-pane="color">
+      <div class="field">
+        <span class="lbl">Set color for</span>
+        <div class="seg" id="tgtSeg">
+          <button type="button" data-tgt="bg" aria-pressed="true">Poster</button>
+          <button type="button" data-tgt="text" aria-pressed="false">Text</button>
+        </div>
+      </div>
+      <div class="field"><span class="lbl">Colors from the cover</span><div class="swatches" id="swatches"></div></div>
+      <div class="field"><span class="lbl">Custom colors</span><div class="pickers" id="pickers"></div></div>
+      <button class="btn" id="btnResetColors" type="button">Reset to cover colors</button>
+    </div>
+
+    <div class="pane" data-pane="toggles">
+      <div class="toggles" id="toggles"></div>
+      <p class="hint" id="codeHint" hidden>The Spotify code needs a Spotify link. Create the poster from a link to turn it on.</p>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Your poster">
+    <img id="outImg" alt="Finished poster">
+    <p class="hint">On a phone, press and hold the poster and choose Save to Photos. On a computer use the Download button.</p>
+    <div class="row">
+      <a class="btn primary" id="outDownload" download="poster.png">Download</a>
+      <button class="btn" id="outShare" type="button" hidden>Share or save</button>
+      <button class="btn" id="outClose" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+
+  /* ---------- fonts ---------- */
+  var FONTS = {
+    'Figtree': { title: 800, track: 700, text: 500 },
+    'Montserrat': { title: 800, track: 600, text: 500 },
+    'Oswald': { title: 700, track: 500, text: 400 },
+    'Bebas Neue': { title: 400, track: 400, text: 400 },
+    'Playfair Display': { title: 700, track: 600, text: 400 },
+    'DM Serif Display': { title: 400, track: 400, text: 400 },
+    'Space Mono': { title: 700, track: 700, text: 400 }
+  };
+  var SIGNATURE_FONT = 'Mrs Saint Delafield';
+
+  var RATIOS = [
+    { r: 1.25, label: '4:5  (8×10, 16×20 in)' },
+    { r: 14 / 11, label: '11:14  (11×14 in)' },
+    { r: 4 / 3, label: '3:4  (12×16, 18×24 in)' },
+    { r: 1.5, label: '2:3  (12×18, 24×36 in)' },
+    { r: 1.4142, label: 'A series  (A4, A3, A2)' }
+  ];
+
+  var TOGGLES = [
+    ['shadows', 'Shadows'], ['coverBorder', 'Cover border'], ['colorBlocks', 'Color blocks'],
+    ['trackNumbers', 'Track numbers'], ['spotifyCode', 'Spotify code'], ['posterBorder', 'Poster border'],
+    ['signature', 'Artist signature'], ['upperTracks', 'Uppercase tracks'], ['upperTitle', 'Uppercase title']
+  ];
+
+  var SLIDERS = [
+    ['cover', 'Cover size', 0.5, 1.3, 0.02],
+    ['title', 'Album title size', 0.5, 1.8, 0.02],
+    ['artist', 'Artist name size', 0.5, 1.8, 0.02],
+    ['block', 'Color block size', 0.4, 2, 0.02],
+    ['songH', 'Track text size', 0.5, 1.6, 0.02],
+    ['songSpace', 'Track spacing', 0, 3, 0.05],
+    ['colW', 'Track column width', 0.6, 1.6, 0.02]
+  ];
+
+  var EXPORT_W = 2400;
+
+  /* ---------- state ---------- */
+  function freshState() {
+    return {
+      template: 'classic', ratio: 1.25, font: 'Figtree',
+      on: { shadows: true, coverBorder: true, colorBlocks: true, trackNumbers: true, spotifyCode: true, posterBorder: true, signature: false, upperTracks: true, upperTitle: false },
+      k: { cover: 1, title: 1, artist: 1, block: 1, songH: 1, songSpace: 1, colW: 1 },
+      colors: { bg: null, text: null, blocks: [null, null, null, null] },
+      target: 'bg'
+    };
+  }
+  var state = freshState();
+
+  var album = { id: null, title: '', artist: '', year: '', tracks: [], img: null, palette: [], sample: false, coverUrl: null, customCover: false };
+
+  /* ---------- colour helpers ---------- */
+  function hex2rgb(h) { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join(''); var n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  function rgb2hex(c) { return '#' + c.map(function (v) { return Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0'); }).join(''); }
+  function mix(a, b, t) { return a.map(function (v, i) { return v + (b[i] - v) * t; }); }
+  function lum(c) { var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }
+  function sat(c) { var mx = Math.max.apply(null, c), mn = Math.min.apply(null, c); return mx === 0 ? 0 : (mx - mn) / mx; }
+  function dist(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); }
+
+  function autoBg(pal) {
+    var best = null, bs = 0;
+    pal.slice(0, 5).forEach(function (h) {
+      var c = hex2rgb(h), l = lum(c), s = sat(c);
+      var score = s * (l > 0.03 && l < 0.85 ? 1 : 0.3);
+      if (score > bs) { bs = score; best = c; }
+    });
+    if (!best || bs < 0.15) return '#f1eeea';
+    return rgb2hex(mix(best, [255, 255, 255], 0.9));
+  }
+
+  function resolved() {
+    var pal = album.palette;
+    var bg = state.colors.bg || autoBg(pal);
+    var text = state.colors.text || (lum(hex2rgb(bg)) > 0.45 ? '#0b0b0c' : '#f6f3ee');
+    var blocks = [0, 1, 2, 3].map(function (i) { return state.colors.blocks[i] || pal[i] || pal[pal.length - 1] || '#888888'; });
+    return { bg: bg, text: text, blocks: blocks };
+  }
+
+  function extractPalette(src, max) {
+    var s = 72, c = document.createElement('canvas');
+    c.width = c.height = s;
+    var g = c.getContext('2d', { willReadFrequently: true });
+    drawCoverCrop(g, src, 0, 0, s);
+    var d;
+    try { d = g.getImageData(0, 0, s, s).data; } catch (e) { return []; }
+    var bins = {};
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 200) continue;
+      var key = ((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4);
+      var b = bins[key];
+      if (!b) { b = bins[key] = { n: 0, r: 0, g: 0, b: 0 }; }
+      b.n++; b.r += d[i]; b.g += d[i + 1]; b.b += d[i + 2];
+    }
+    var list = Object.keys(bins).map(function (k) { var b = bins[k]; return { n: b.n, c: [b.r / b.n, b.g / b.n, b.b / b.n] }; });
+    list.sort(function (a, b) { return b.n - a.n; });
+    var out = [];
+    for (var j = 0; j < list.length && out.length < max; j++) {
+      var it = list[j];
+      if (out.every(function (o) { return dist(o.c, it.c) > 56; })) out.push(it);
+    }
+    return out.map(function (o) { return rgb2hex(o.c); });
+  }
+
+  function applyAccent(pal) {
+    var root = document.documentElement.style;
+    var best = null, bs = 0;
+    pal.forEach(function (h) {
+      var c = hex2rgb(h), s = sat(c), l = lum(c);
+      var score = s * (l > 0.05 ? 1 : 0.2);
+      if (score > bs) { bs = score; best = c; }
+    });
+    if (!best || bs < 0.25) { root.setProperty('--accent', '#ffb14a'); root.setProperty('--accent-ink', '#1b1200'); return; }
+    var l0 = lum(best);
+    if (l0 < 0.22) best = mix(best, [255, 255, 255], 0.45);
+    root.setProperty('--accent', rgb2hex(best));
+    root.setProperty('--accent-ink', lum(best) > 0.35 ? '#141008' : '#ffffff');
+  }
+
+  /* ---------- image helpers ---------- */
+  function loadImage(src) {
+    return new Promise(function (res, rej) {
+      var i = new Image();
+      i.onload = function () { res(i); };
+      i.onerror = function () { rej(new Error('Image failed to load')); };
+      i.src = src;
+    });
+  }
+
+  function drawCoverCrop(ctx, img, x, y, s) {
+    var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    var side = Math.min(iw, ih);
+    ctx.drawImage(img, (iw - side) / 2, (ih - side) / 2, side, side, x, y, s, s);
+  }
+
+  var codeCache = {};
+  function codeEntry(id, bgHex, fg) {
+    var key = id + '|' + bgHex + '|' + fg;
+    var e = codeCache[key];
+    if (e) return e;
+    e = codeCache[key] = { ok: false, failed: false, img: new Image() };
+    e.promise = new Promise(function (resolve) {
+      e.img.onload = function () { e.ok = true; resolve(); requestRender(); };
+      e.img.onerror = function () { e.failed = true; resolve(); showNote('The Spotify code could not load, so the poster is drawn without it.'); };
+    });
+    var url = 'https://scannables.scdn.co/uri/plain/png/' + bgHex.slice(1) + '/' + fg + '/640/spotify:album:' + id;
+    e.img.src = 'api/img?u=' + encodeURIComponent(url);
+    return e;
+  }
+  function codeParams() {
+    var R = resolved();
+    return { bg: R.bg, fg: lum(hex2rgb(R.bg)) > 0.45 ? 'black' : 'white' };
+  }
+
+  /* ---------- text helpers ---------- */
+  function wrap(ctx, text, maxW, maxLines) {
+    var words = String(text).split(/\s+/);
+    var lines = [], cur = '';
+    for (var i = 0; i < words.length; i++) {
+      var w = words[i];
+      while (ctx.measureText(w).width > maxW && w.length > 1) {
+        var n = w.length - 1;
+        while (n > 1 && ctx.measureText(w.slice(0, n)).width > maxW) n--;
+        if (cur) { lines.push(cur); cur = ''; }
+        lines.push(w.slice(0, n));
+        w = w.slice(n);
+      }
+      var test = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(test).width <= maxW) cur = test;
+      else { if (cur) lines.push(cur); cur = w; }
+    }
+    if (cur) lines.push(cur);
+    if (lines.length > maxLines) {
+      var keep = lines.slice(0, maxLines);
+      var last = keep[maxLines - 1];
+      while (last.length > 1 && ctx.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+      keep[maxLines - 1] = last + '…';
+      return keep;
+    }
+    return lines;
+  }
+
+  function flowTracks(ctx, list, box, basePx, baseColW, fontFn, k) {
+    var best = null;
+    for (var s = 1; s >= 0.38; s *= 0.95) {
+      var px = basePx * s, lineH = px * 1.3, gap = px * 0.42 * k.songSpace, colW = baseColW * s, padX = px * 0.9;
+      var textW = colW - padX;
+      var maxCols = Math.max(1, Math.floor((box.w + padX) / colW));
+      ctx.font = fontFn(px);
+      var pos = [], col = 0, y = 0;
+      for (var i = 0; i < list.length; i++) {
+        var lines = wrap(ctx, list[i], textW, 3);
+        var h = lines.length * lineH;
+        if (y > 0 && y + h > box.h) { col++; y = 0; }
+        pos.push({ lines: lines, col: col, y: y });
+        y += h + gap;
+      }
+      best = { pos: pos, px: px, lineH: lineH, colW: colW, fit: col + 1 <= maxCols };
+      if (best.fit) break;
+    }
+    return best || { pos: [], px: basePx, lineH: basePx * 1.3, colW: baseColW, fit: true };
+  }
+
+  function fakeCode(ctx, x, y, w, h, color) {
+    ctx.save();
+    ctx.fillStyle = color; ctx.strokeStyle = color;
+    ctx.beginPath(); ctx.arc(x + h / 2, y + h / 2, h * 0.46, 0, Math.PI * 2); ctx.fill();
+    var n = 22, startX = x + h * 1.15, span = w - h * 1.15, step = span / n;
+    ctx.lineCap = 'round'; ctx.lineWidth = step * 0.42;
+    for (var i = 0; i < n; i++) {
+      var bh = h * (0.22 + 0.74 * Math.abs(Math.sin(i * 1.7 + 1.1)));
+      var bx = startX + step * i + step / 2;
+      ctx.beginPath(); ctx.moveTo(bx, y + h / 2 - bh / 2); ctx.lineTo(bx, y + h / 2 + bh / 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /* ---------- poster drawing ---------- */
+  function draw(cv, W) {
+    var H = Math.round(W * state.ratio);
+    cv.width = W; cv.height = H;
+    var ctx = cv.getContext('2d');
+    var R = resolved(), a = album, K = state.k, on = state.on;
+    var F = FONTS[state.font] || FONTS.Figtree;
+    var fam = '"' + state.font + '", system-ui, sans-serif';
+    var fnt = function (w, px) { return w + ' ' + px + 'px ' + fam; };
+    var m = 0.033 * W;
+    var modern = state.template === 'modern';
+
+    ctx.fillStyle = R.bg; ctx.fillRect(0, 0, W, H);
+    ctx.textBaseline = 'alphabetic';
+
+    var title = (on.upperTitle ? a.title.toUpperCase() : a.title) || ' ';
+    var list = a.tracks.filter(Boolean).map(function (t, i) {
+      var s = on.upperTracks ? t.toUpperCase() : t;
+      return on.trackNumbers ? (i + 1) + ': ' + s : s;
+    });
+
+    /* cover */
+    var cw, cx, cy;
+    if (modern) { cw = Math.min(0.64 * W * K.cover, 0.8 * W - 2 * m); cx = m; cy = m; }
+    else { cw = Math.min(0.70 * W * K.cover, 0.94 * W); cx = (W - cw) / 2; cy = 0.032 * W; }
+    ctx.save();
+    if (on.shadows) { ctx.shadowColor = 'rgba(0,0,0,0.38)'; ctx.shadowBlur = 0.022 * W; ctx.shadowOffsetY = 0.008 * W; }
+    ctx.fillStyle = '#26262b'; ctx.fillRect(cx, cy, cw, cw);
+    ctx.restore();
+    if (a.img) drawCoverCrop(ctx, a.img, cx, cy, cw);
+    else {
+      ctx.fillStyle = '#8d8f98'; ctx.textAlign = 'center'; ctx.font = fnt(600, cw * 0.05);
+      ctx.fillText('Cover art', cx + cw / 2, cy + cw / 2);
+    }
+    if (on.coverBorder) {
+      var lw = Math.max(1, 0.0028 * W);
+      ctx.strokeStyle = R.text; ctx.lineWidth = lw;
+      ctx.strokeRect(cx + lw / 2, cy + lw / 2, cw - lw, cw - lw);
+    }
+    if (on.signature && a.artist) {
+      ctx.save();
+      ctx.translate(cx + cw - 0.035 * W, cy + cw - 0.04 * W);
+      ctx.rotate(-0.07);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 0.012 * W;
+      ctx.font = '400 ' + (0.1 * W) + 'px "' + SIGNATURE_FONT + '", cursive';
+      ctx.fillText(a.artist, 0, 0);
+      ctx.restore();
+    }
+
+    /* shared metrics */
+    var top = cy + cw + (modern ? 0.04 : 0.034) * W;
+    var bs = 0.04 * W * K.block, bgap = 0.0065 * W;
+    var blocksW = 4 * bs + 3 * bgap;
+    var codeW = 0.19 * W, codeH = codeW / 4;
+    var blocksOn = on.colorBlocks;
+    var codeOn = on.spotifyCode && (a.id || a.sample);
+    var aPx = 0.0235 * W * K.artist, yPx = 0.0165 * W * K.artist;
+    var aH = a.artist ? aPx * 1.25 : 0, yH = a.year ? yPx * 1.4 : 0;
+
+    function drawBlocks(rightX, y) {
+      var x0 = rightX - blocksW;
+      for (var i = 0; i < 4; i++) {
+        var bx = x0 + i * (bs + bgap);
+        ctx.save();
+        if (on.shadows) { ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 0.008 * W; ctx.shadowOffsetY = 0.003 * W; }
+        ctx.fillStyle = R.blocks[i]; ctx.fillRect(bx, y, bs, bs);
+        ctx.restore();
+        var tc = hex2rgb(R.text);
+        ctx.strokeStyle = 'rgba(' + tc.join(',') + ',0.6)'; ctx.lineWidth = Math.max(1, 0.0016 * W);
+        ctx.strokeRect(bx, y, bs, bs);
+      }
+    }
+    function drawCode(rightX, y) {
+      if (a.sample && !a.id) { fakeCode(ctx, rightX - codeW, y, codeW, codeH, R.text); return; }
+      var p = codeParams();
+      var e = codeEntry(a.id, p.bg, p.fg);
+      if (e.ok) ctx.drawImage(e.img, rightX - codeW, y, codeW, codeH);
+    }
+
+    var box;
+    if (!modern) {
+      var titleMaxW = 0.31 * W;
+      var blocksBottom = (top - 0.006 * W) + (blocksOn ? bs : 0);
+      var ts = K.title, tpx, tl, stackTop;
+      for (var i = 0; i < 14; i++) {
+        tpx = 0.052 * W * ts;
+        ctx.font = fnt(F.title, tpx);
+        tl = wrap(ctx, title, titleMaxW, 4);
+        var stackH = tl.length * tpx * 1.2 + 0.012 * W + aH + yH + (codeOn ? 0.02 * W + codeH : 0);
+        stackTop = H - m - stackH;
+        if (tl.length <= 3 && stackTop >= blocksBottom + 0.02 * W) break;
+        ts *= 0.93;
+      }
+      var rx = W - m, y = stackTop;
+      ctx.textAlign = 'right'; ctx.fillStyle = R.text;
+      ctx.font = fnt(F.title, tpx);
+      tl.forEach(function (ln, i) { ctx.fillText(ln, rx, y + tpx * 0.92 + i * tpx * 1.2); });
+      y += tl.length * tpx * 1.2 + 0.012 * W;
+      if (a.artist) { ctx.font = fnt(F.text, aPx); ctx.fillText(a.artist, rx, y + aPx * 0.95); y += aH; }
+      if (a.year) { ctx.font = fnt(F.text, yPx); ctx.fillText(a.year, rx, y + yPx * 0.95); y += yH; }
+      if (codeOn) drawCode(rx, H - m - codeH);
+      if (blocksOn) drawBlocks(rx, top - 0.006 * W);
+      box = { x: m, y: top, w: W - 2 * m - titleMaxW - 0.02 * W, h: H - m - top };
+    } else {
+      /* Modern: cover on the left, title column beside it, tracklist underneath */
+      var rx0 = cx + cw + 0.03 * W, rW = W - m - rx0;
+      bs = Math.min(bs, (rW - 3 * bgap) / 4);
+      blocksW = 4 * bs + 3 * bgap;
+      codeW = Math.min(codeW, rW); codeH = codeW / 4;
+      var bottomH = (blocksOn ? bs : 0) + (blocksOn && codeOn ? 0.018 * W : 0) + (codeOn ? codeH : 0);
+      var avail = cw - bottomH - 0.02 * W;
+      var ts2 = K.title, tpx2, tl2;
+      for (var j = 0; j < 14; j++) {
+        tpx2 = 0.045 * W * ts2;
+        ctx.font = fnt(F.title, tpx2);
+        tl2 = wrap(ctx, title, rW, 5);
+        if (tl2.length * tpx2 * 1.15 + 0.012 * W + aH + yH <= avail) break;
+        ts2 *= 0.93;
+      }
+      ctx.textAlign = 'left'; ctx.fillStyle = R.text;
+      ctx.font = fnt(F.title, tpx2);
+      var yy = cy;
+      tl2.forEach(function (ln, i) { ctx.fillText(ln, rx0, yy + tpx2 * 0.9 + i * tpx2 * 1.15); });
+      yy += tl2.length * tpx2 * 1.15 + 0.012 * W;
+      if (a.artist) { ctx.font = fnt(F.text, aPx); ctx.fillText(a.artist, rx0, yy + aPx * 0.95); yy += aH; }
+      if (a.year) { ctx.font = fnt(F.text, yPx); ctx.fillText(a.year, rx0, yy + yPx * 0.95); }
+      var by = cy + cw - bottomH;
+      if (blocksOn) { drawBlocks(rx0 + blocksW, by); by += bs + 0.018 * W; }
+      if (codeOn) drawCode(rx0 + codeW, cy + cw - codeH);
+      box = { x: m, y: top, w: W - 2 * m, h: H - m - top };
+    }
+
+    /* tracklist */
+    var baseColW = (modern ? 0.30 : 0.25) * W * K.colW;
+    var fl = flowTracks(ctx, list, box, 0.0196 * W * K.songH, baseColW, function (px) { return fnt(F.track, px); }, K);
+    ctx.textAlign = 'left'; ctx.fillStyle = R.text; ctx.font = fnt(F.track, fl.px);
+    fl.pos.forEach(function (p) {
+      p.lines.forEach(function (ln, i) {
+        ctx.fillText(ln, box.x + p.col * fl.colW, box.y + p.y + i * fl.lineH + fl.px * 1.0);
+      });
+    });
+
+    if (on.posterBorder) {
+      var bw = Math.max(2, 0.003 * W);
+      ctx.strokeStyle = R.text; ctx.lineWidth = bw;
+      ctx.strokeRect(bw / 2, bw / 2, W - bw, H - bw);
+    }
+  }
+
+  /* ---------- rendering ---------- */
+  var preview = $('#poster');
+  var raf = 0;
+  function requestRender() {
+    if (raf) return;
+    raf = requestAnimationFrame(function () {
+      raf = 0;
+      draw(preview, 1000);
+      $('#frame').style.setProperty('--r', state.ratio);
+      $('#sizeNote').textContent = 'Downloads at ' + EXPORT_W + ' × ' + Math.round(EXPORT_W * state.ratio) + ' px';
+    });
+  }
+
+  function ensureFonts() {
+    var F = FONTS[state.font], fam = state.font, jobs = [];
+    [F.title, F.track, F.text].forEach(function (w) { jobs.push(document.fonts.load(w + ' 20px "' + fam + '"')); });
+    if (state.on.signature) jobs.push(document.fonts.load('400 20px "' + SIGNATURE_FONT + '"'));
+    return Promise.all(jobs).catch(function () {});
+  }
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', requestRender);
+
+  var noteTimer = 0;
+  function showNote(t) { $('#stageNote').textContent = t; clearTimeout(noteTimer); noteTimer = setTimeout(function () { $('#stageNote').textContent = ''; }, 8000); }
+  function setStatus(t, kind) { var s = $('#status'); s.textContent = t || ''; s.setAttribute('data-kind', kind || ''); }
+
+  /* ---------- album loading ---------- */
+  function sampleCover() {
+    var c = document.createElement('canvas'); c.width = c.height = 900;
+    var g = c.getContext('2d');
+    var bg = g.createLinearGradient(0, 0, 0, 900);
+    bg.addColorStop(0, '#10203a'); bg.addColorStop(0.55, '#2b3f66'); bg.addColorStop(1, '#e8a06a');
+    g.fillStyle = bg; g.fillRect(0, 0, 900, 900);
+    g.save(); g.beginPath(); g.arc(450, 500, 200, 0, Math.PI * 2); g.clip();
+    g.fillStyle = '#f6d186'; g.fillRect(0, 0, 900, 900);
+    g.fillStyle = '#e8a06a';
+    for (var i = 0; i < 6; i++) g.fillRect(200, 530 + i * 30, 500, 6 + i * 3);
+    g.restore();
+    var cols = ['#1c6b78', '#134a5c', '#0b2a3a'];
+    for (var r = 0; r < 3; r++) {
+      g.fillStyle = cols[r]; g.beginPath(); g.moveTo(0, 900);
+      for (var x = 0; x <= 900; x += 10) g.lineTo(x, 640 + r * 80 + Math.sin(x / 70 + r * 1.7) * 22);
+      g.lineTo(900, 900); g.closePath(); g.fill();
+    }
+    g.fillStyle = '#fdf3e0'; g.textAlign = 'center'; g.font = '700 70px Georgia, serif';
+    g.fillText('SALT & STATIC', 450, 130);
+    return c;
+  }
+
+  function fillEditFields() {
+    $('#eTitle').value = album.title; $('#eArtist').value = album.artist; $('#eYear').value = album.year;
+    $('#eTracks').value = album.tracks.join('\n');
+    $('#btnCoverReset').hidden = !(album.customCover && album.coverUrl);
+  }
+
+  function afterAlbumChange(resetColors) {
+    album.palette = album.img ? extractPalette(album.img, 10) : [];
+    if (resetColors) state.colors = { bg: null, text: null, blocks: [null, null, null, null] };
+    applyAccent(album.palette);
+    buildSwatches(); syncPickers(); fillEditFields(); syncCodeHint();
+    requestRender();
+  }
+
+  function setSample() {
+    album = { id: null, title: 'Salt & Static', artist: 'Marlow Vane', year: '2024', sample: true, coverUrl: null, customCover: false,
+      tracks: ['Low Tide Radio', 'Paper Lanterns', 'Glass Hours', 'Slow Boat to Nowhere', 'Neon Fog', 'Static Bloom', 'Harbour Lights', 'Night Swimming', 'Ferry Song', 'Copper Sky', 'Tin Roof', 'Afterglow', 'Salt', 'Last Train Home'],
+      img: sampleCover(), palette: [] };
+    afterAlbumChange(true);
+  }
+
+  var NO_SERVER = 'no-server';
+  async function fetchAlbum(link) {
+    var res;
+    try { res = await fetch('api/album?link=' + encodeURIComponent(link), { headers: { accept: 'application/json' } }); }
+    catch (e) { var er = new Error(NO_SERVER); er.code = NO_SERVER; throw er; }
+    var ct = res.headers.get('content-type') || '';
+    if (ct.indexOf('json') < 0) { var e2 = new Error(NO_SERVER); e2.code = NO_SERVER; throw e2; }
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Lookup failed');
+    return data;
+  }
+
+  async function applyAlbumData(data, keepStyle) {
+    var img = null, coverFailed = false;
+    if (data.coverUrl) {
+      try { img = await loadImage(data.coverUrl); } catch (e) { coverFailed = true; }
+    }
+    album = { id: data.id, title: data.title || '', artist: data.artist || '', year: data.year || '', tracks: data.tracks || [],
+      img: img, palette: [], sample: false, coverUrl: data.coverUrl || null, customCover: false };
+    afterAlbumChange(!keepStyle);
+    return { partial: !!data.partial, coverFailed: coverFailed };
+  }
+
+  var busy = false;
+  async function createFromLink(link) {
+    link = (link || '').trim();
+    if (!link) { setStatus('Paste a Spotify album link first.', 'err'); return; }
+    if (busy) return;
+    busy = true; $('#btnCreate').disabled = true;
+    setStatus('Looking up the album...', '');
+    try {
+      var data = await fetchAlbum(link);
+      var r = await applyAlbumData(data, false);
+      var msg = 'Loaded ' + album.title + (album.artist ? ' by ' + album.artist : '') + (album.tracks.length ? ', ' + album.tracks.length + ' tracks.' : '.');
+      if (r.partial) msg += ' Only the title and cover came through. Add the tracklist in the Edit tab.';
+      if (r.coverFailed) msg += ' The cover could not load. Upload one in the Edit tab.';
+      setStatus(msg, r.partial || r.coverFailed ? '' : 'ok');
+    } catch (e) {
+      if (e.code === NO_SERVER) {
+        setStatus('Link lookup needs the Backsleeve server, and this copy is running without it. You can still type the title and tracks in the Edit tab, upload a cover and download the poster.', 'err');
+      } else {
+        setStatus(e.message || 'Something went wrong. Try again.', 'err');
+      }
+    } finally {
+      busy = false; $('#btnCreate').disabled = false;
+    }
+  }
+
+  /* ---------- poster code ---------- */
+  function b64e(s) { var b = new TextEncoder().encode(s), bin = ''; b.forEach(function (x) { bin += String.fromCharCode(x); }); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function b64d(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var bin = atob(s); return new TextDecoder().decode(Uint8Array.from(bin, function (c) { return c.charCodeAt(0); })); }
+
+  function makeCode() {
+    var bits = TOGGLES.map(function (t) { return state.on[t[0]] ? '1' : '0'; }).join('');
+    var ks = SLIDERS.map(function (s) { return +state.k[s[0]].toFixed(2); });
+    var cols = [state.colors.bg || '', state.colors.text || ''].concat(state.colors.blocks.map(function (c) { return c || ''; }));
+    return b64e(JSON.stringify([1, album.id || '', state.template === 'modern' ? 1 : 0, +state.ratio.toFixed(4), state.font, bits, ks, cols, album.title, album.artist, album.year, album.tracks.join('\n')]));
+  }
+
+  async function loadCode(code) {
+    var arr;
+    try { arr = JSON.parse(b64d(code.trim())); } catch (e) { arr = null; }
+    if (!Array.isArray(arr) || arr[0] !== 1 || arr.length < 12) { setStatus('That poster code is not valid.', 'err'); return; }
+    var next = freshState();
+    next.template = arr[2] ? 'modern' : 'classic';
+    next.ratio = RATIOS.some(function (r) { return Math.abs(r.r - arr[3]) < 0.01; }) ? +arr[3] : 1.25;
+    next.font = FONTS[arr[4]] ? arr[4] : 'Figtree';
+    TOGGLES.forEach(function (t, i) { next.on[t[0]] = arr[5][i] === '1'; });
+    SLIDERS.forEach(function (s, i) { var v = Number(arr[6][i]); if (isFinite(v)) next.k[s[0]] = Math.min(s[3], Math.max(s[2], v)); });
+    next.colors.bg = /^#[0-9a-f]{6}$/i.test(arr[7][0]) ? arr[7][0] : null;
+    next.colors.text = /^#[0-9a-f]{6}$/i.test(arr[7][1]) ? arr[7][1] : null;
+    next.colors.blocks = [2, 3, 4, 5].map(function (i) { return /^#[0-9a-f]{6}$/i.test(arr[7][i]) ? arr[7][i] : null; });
+    state = next;
+    setStatus('Loading poster...', '');
+    var id = String(arr[1] || '');
+    if (/^[A-Za-z0-9]{22}$/.test(id)) {
+      try {
+        var data = await fetchAlbum(id);
+        await applyAlbumData(data, true);
+      } catch (e) {
+        if (e.code !== NO_SERVER) { setStatus(e.message, 'err'); }
+      }
+    }
+    album.title = String(arr[8]); album.artist = String(arr[9]); album.year = String(arr[10]);
+    album.tracks = String(arr[11]).split('\n').filter(Boolean);
+    afterAlbumChange(false);
+    syncControls();
+    setStatus('Poster loaded.', 'ok');
+  }
+
+  /* ---------- UI building ---------- */
+  function buildSliders() {
+    var host = $('#sliders');
+    SLIDERS.forEach(function (s) {
+      var d = document.createElement('div'); d.className = 'slider';
+      d.innerHTML = '<label for="k-' + s[0] + '">' + s[1] + '</label><output id="o-' + s[0] + '"></output>' +
+        '<input type="range" id="k-' + s[0] + '" min="' + s[2] + '" max="' + s[3] + '" step="' + s[4] + '">';
+      host.appendChild(d);
+      d.querySelector('input').addEventListener('input', function (ev) {
+        state.k[s[0]] = parseFloat(ev.target.value);
+        $('#o-' + s[0]).textContent = Math.round(state.k[s[0]] * 100) + '%';
+        requestRender();
+      });
+    });
+  }
+
+  function buildFonts() {
+    var host = $('#fonts');
+    Object.keys(FONTS).forEach(function (name) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.textContent = name; b.style.fontFamily = '"' + name + '", sans-serif';
+      b.setAttribute('aria-pressed', 'false'); b.dataset.font = name;
+      b.addEventListener('click', function () { state.font = name; syncControls(); ensureFonts().then(requestRender); requestRender(); });
+      host.appendChild(b);
+    });
+  }
+
+  function buildToggles() {
+    var host = $('#toggles');
+    TOGGLES.forEach(function (t) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.dataset.key = t[0];
+      b.innerHTML = '<span>' + t[1] + '</span><span class="st"></span>';
+      b.addEventListener('click', function () {
+        state.on[t[0]] = !state.on[t[0]];
+        syncControls();
+        if (t[0] === 'signature') ensureFonts().then(requestRender);
+        requestRender();
+      });
+      host.appendChild(b);
+    });
+  }
+
+  function buildRatios() {
+    var sel = $('#ratio');
+    RATIOS.forEach(function (r, i) { var o = document.createElement('option'); o.value = i; o.textContent = r.label; sel.appendChild(o); });
+    sel.addEventListener('change', function () { state.ratio = RATIOS[+sel.value].r; requestRender(); });
+  }
+
+  function buildSwatches() {
+    var host = $('#swatches');
+    host.innerHTML = '';
+    var list = album.palette.slice(0, 8).concat(['#0b0b0c', '#f3f0ec', '#ffffff']);
+    list.forEach(function (hex) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.style.background = hex; b.setAttribute('aria-label', 'Use ' + hex);
+      b.addEventListener('click', function () {
+        state.colors[state.target] = hex;
+        syncPickers(); requestRender();
+      });
+      host.appendChild(b);
+    });
+  }
+
+  var PICKERS = [['bg', 'Poster'], ['text', 'Text'], ['b0', 'Block 1'], ['b1', 'Block 2'], ['b2', 'Block 3'], ['b3', 'Block 4']];
+  function buildPickers() {
+    var host = $('#pickers');
+    PICKERS.forEach(function (p) {
+      var w = document.createElement('label'); w.className = 'picker';
+      w.innerHTML = '<span>' + p[1] + '</span><input type="color" id="pk-' + p[0] + '">';
+      host.appendChild(w);
+      w.querySelector('input').addEventListener('input', function (ev) {
+        var v = ev.target.value;
+        if (p[0] === 'bg') state.colors.bg = v;
+        else if (p[0] === 'text') state.colors.text = v;
+        else state.colors.blocks[+p[0].slice(1)] = v;
+        requestRender();
+      });
+    });
+  }
+  function syncPickers() {
+    var R = resolved();
+    $('#pk-bg').value = R.bg; $('#pk-text').value = R.text;
+    for (var i = 0; i < 4; i++) $('#pk-b' + i).value = R.blocks[i];
+  }
+
+  function syncCodeHint() {
+    $('#codeHint').hidden = !!(album.id || album.sample);
+  }
+
+  function syncControls() {
+    document.querySelectorAll('#toggles button').forEach(function (b) {
+      var on = state.on[b.dataset.key];
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.querySelector('.st').textContent = on ? 'On' : 'Off';
+    });
+    document.querySelectorAll('#fonts button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.font === state.font ? 'true' : 'false'); });
+    document.querySelectorAll('#tplSeg button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.tpl === state.template ? 'true' : 'false'); });
+    document.querySelectorAll('#tgtSeg button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.tgt === state.target ? 'true' : 'false'); });
+    SLIDERS.forEach(function (s) {
+      $('#k-' + s[0]).value = state.k[s[0]];
+      $('#o-' + s[0]).textContent = Math.round(state.k[s[0]] * 100) + '%';
+    });
+    var idx = RATIOS.findIndex(function (r) { return Math.abs(r.r - state.ratio) < 0.01; });
+    $('#ratio').value = idx < 0 ? 0 : idx;
+    syncPickers();
+  }
+
+  /* ---------- events ---------- */
+  document.querySelectorAll('#tabs .tab').forEach(function (t) {
+    t.addEventListener('click', function () {
+      document.querySelectorAll('#tabs .tab').forEach(function (x) { x.setAttribute('aria-selected', x === t ? 'true' : 'false'); });
+      document.querySelectorAll('.pane').forEach(function (p) { p.classList.toggle('on', p.dataset.pane === t.dataset.tab); });
+    });
+  });
+
+  $('#btnCreate').addEventListener('click', function () { createFromLink($('#link').value); });
+  $('#link').addEventListener('keydown', function (e) { if (e.key === 'Enter') createFromLink($('#link').value); });
+
+  document.querySelectorAll('#tplSeg button').forEach(function (b) {
+    b.addEventListener('click', function () { state.template = b.dataset.tpl; syncControls(); requestRender(); });
+  });
+  document.querySelectorAll('#tgtSeg button').forEach(function (b) {
+    b.addEventListener('click', function () { state.target = b.dataset.tgt; syncControls(); });
+  });
+  $('#btnResetColors').addEventListener('click', function () {
+    state.colors = { bg: null, text: null, blocks: [null, null, null, null] };
+    syncPickers(); requestRender();
+  });
+
+  function editedByHand() { album.sample = false; syncCodeHint(); requestRender(); }
+  $('#eTitle').addEventListener('input', function (e) { album.title = e.target.value; editedByHand(); });
+  $('#eArtist').addEventListener('input', function (e) { album.artist = e.target.value; editedByHand(); });
+  $('#eYear').addEventListener('input', function (e) { album.year = e.target.value; editedByHand(); });
+  $('#eTracks').addEventListener('input', function (e) {
+    album.tracks = e.target.value.split('\n').map(function (l) { return l.trim().replace(/^\d+\s*[.:)\-]\s*/, ''); }).filter(Boolean);
+    editedByHand();
+  });
+
+  $('#btnCover').addEventListener('click', function () { $('#coverFile').click(); });
+  $('#coverFile').addEventListener('change', async function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try {
+      var img = await loadImage(URL.createObjectURL(f));
+      album.img = img; album.customCover = true; album.sample = false;
+      afterAlbumChange(true);
+    } catch (er) { showNote('That file could not be read as an image.'); }
+    e.target.value = '';
+  });
+  $('#btnCoverReset').addEventListener('click', async function () {
+    if (!album.coverUrl) return;
+    try { album.img = await loadImage(album.coverUrl); album.customCover = false; afterAlbumChange(true); } catch (er) { showNote('The Spotify cover could not load.'); }
+  });
+
+  $('#btnCopyCode').addEventListener('click', async function () {
+    var code = makeCode(); var box = $('#codeBox');
+    box.value = code;
+    try { await navigator.clipboard.writeText(code); setStatus('Code copied.', 'ok'); }
+    catch (e) { box.focus(); box.select(); setStatus('Press and hold the code box to copy it.', ''); }
+  });
+  $('#btnLoadCode').addEventListener('click', function () { loadCode($('#codeBox').value); });
+
+  /* download */
+  var outUrl = '';
+  function closeOverlay() { $('#overlay').hidden = true; if (outUrl) { URL.revokeObjectURL(outUrl); outUrl = ''; } }
+  $('#outClose').addEventListener('click', closeOverlay);
+  $('#overlay').addEventListener('click', function (e) { if (e.target === $('#overlay')) closeOverlay(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('#overlay').hidden) closeOverlay(); });
+
+  $('#btnDownload').addEventListener('click', async function () {
+    var btn = $('#btnDownload'); btn.disabled = true; btn.textContent = 'Rendering...';
+    try {
+      await ensureFonts();
+      if (state.on.spotifyCode && album.id) { var p = codeParams(); await codeEntry(album.id, p.bg, p.fg).promise; }
+      var cv = document.createElement('canvas');
+      draw(cv, EXPORT_W);
+      var blob = await new Promise(function (res) { cv.toBlob(res, 'image/png'); });
+      if (!blob) throw new Error('Render failed');
+      if (outUrl) URL.revokeObjectURL(outUrl);
+      outUrl = URL.createObjectURL(blob);
+      var name = ((album.artist ? album.artist + ' - ' : '') + (album.title || 'poster')).replace(/[\\/:*?"<>|]+/g, '').trim() + ' poster.png';
+      $('#outImg').src = outUrl;
+      var dl = $('#outDownload'); dl.href = outUrl; dl.setAttribute('download', name);
+      var share = $('#outShare');
+      var file = new File([blob], name, { type: 'image/png' });
+      var canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+      share.hidden = !canShare;
+      share.onclick = function () { navigator.share({ files: [file], title: name }).catch(function () {}); };
+      $('#overlay').hidden = false;
+    } catch (e) {
+      showNote('Could not render the poster. Try again.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Download PNG';
+    }
+  });
+
+  /* ---------- boot ---------- */
+  buildSliders(); buildFonts(); buildToggles(); buildRatios(); buildPickers();
+  syncControls();
+  ensureFonts().then(function () {
+    setSample();
+    var q = new URLSearchParams(location.search).get('album');
+    if (q) { $('#link').value = q; createFromLink(q); }
+  });
+
+})();
+</script>
+</body>
+</html>
