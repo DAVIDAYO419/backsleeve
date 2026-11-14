@@ -196,9 +196,21 @@ async function getAlbum(id) {
   throw lastErr || new Error('Lookup failed');
 }
 
+// Spotify serves the same cover art from i.scdn.co and from image-cdn-*.spotifycdn.com.
+// The 40 character id is a 16 character size code plus a 24 character hash. 0000b273 is the 640 px size.
+function normalizeCover(url) {
+  if (!url) return null;
+  const m = String(url).match(/\/image\/ab67616d[0-9a-f]{8}([0-9a-f]{24})(?:[/?#]|$)/i);
+  return m ? `https://i.scdn.co/image/ab67616d0000b273${m[1].toLowerCase()}` : url;
+}
+
 function withProxyCover(album) {
+  const proxy = u => (u ? `api/img?u=${encodeURIComponent(u)}` : null);
+  const main = normalizeCover(album.cover);
   return Object.assign({}, album, {
-    coverUrl: album.cover ? `api/img?u=${encodeURIComponent(album.cover)}` : null
+    cover: main,
+    coverUrl: proxy(main),
+    coverAltUrl: album.cover && album.cover !== main ? proxy(album.cover) : null
   });
 }
 
@@ -226,18 +238,29 @@ function sendJson(res, status, obj) {
   res.end(body);
 }
 
-const IMG_HOSTS = { 'i.scdn.co': '/image/', 'scannables.scdn.co': '/uri/', 'mosaic.scdn.co': '/' };
+const IMG_RULES = [
+  { host: h => h === 'i.scdn.co', prefix: '/image/' },
+  { host: h => /^image-cdn-[a-z0-9-]+\.spotifycdn\.com$/.test(h), prefix: '/image/' },
+  { host: h => h === 'scannables.scdn.co', prefix: '/uri/' },
+  { host: h => h === 'mosaic.scdn.co', prefix: '/' }
+];
+function imageAllowed(t) {
+  return t.protocol === 'https:' && IMG_RULES.some(r => r.host(t.hostname) && t.pathname.startsWith(r.prefix));
+}
 
 async function handleImg(req, res, u) {
   let t;
   try { t = new URL(u.searchParams.get('u') || ''); } catch (e) { return sendJson(res, 400, { error: 'Bad image URL' }); }
-  const prefix = IMG_HOSTS[t.hostname];
-  if (t.protocol !== 'https:' || prefix === undefined || !t.pathname.startsWith(prefix)) {
+  if (!imageAllowed(t)) {
+    console.error('image blocked:', t.hostname + t.pathname);
     return sendJson(res, 403, { error: 'Image host not allowed' });
   }
-  const r = await fetch(t, { headers: { 'user-agent': UA } });
+  const r = await fetch(t, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(12000) });
   const type = r.headers.get('content-type') || '';
-  if (!r.ok || !/^image\//.test(type)) return sendJson(res, 502, { error: 'Image fetch failed' });
+  if (!r.ok || !/^image\//.test(type)) {
+    console.error('image fetch failed:', r.status, type, t.hostname + t.pathname);
+    return sendJson(res, 502, { error: 'Image fetch failed' });
+  }
   const buf = Buffer.from(await r.arrayBuffer());
   if (buf.length > 8 * 1024 * 1024) return sendJson(res, 502, { error: 'Image too large' });
   res.writeHead(200, { 'content-type': type, 'cache-control': 'public, max-age=86400', 'x-content-type-options': 'nosniff' });
@@ -309,4 +332,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseSpotifyInput, parseEmbedHtml, server };
+module.exports = { parseSpotifyInput, parseEmbedHtml, normalizeCover, imageAllowed, withProxyCover, server };

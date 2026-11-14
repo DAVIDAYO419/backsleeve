@@ -27,3 +27,20 @@ assert.deepStrictEqual(out.tracks, ['One', 'Two']);
 assert.strictEqual(out.cover, 'https://i.scdn.co/image/big');
 assert.throws(() => parseEmbedHtml('<html></html>', ID));
 console.log('parse tests passed');
+
+// Cover handling
+const { normalizeCover, imageAllowed, withProxyCover } = require('../server.js');
+const HASH = 'a1ffb45c4e8a790cd77e1c33';
+assert.strictEqual(normalizeCover(`https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02${HASH}`), `https://i.scdn.co/image/ab67616d0000b273${HASH}`);
+assert.strictEqual(normalizeCover(`https://i.scdn.co/image/ab67616d00004851${HASH}`), `https://i.scdn.co/image/ab67616d0000b273${HASH}`);
+assert.strictEqual(normalizeCover('https://i.scdn.co/image/something-else'), 'https://i.scdn.co/image/something-else');
+assert.strictEqual(normalizeCover(null), null);
+assert.ok(imageAllowed(new URL(`https://image-cdn-ig.spotifycdn.com/image/ab67616d00001e02${HASH}`)));
+assert.ok(imageAllowed(new URL(`https://i.scdn.co/image/ab67616d0000b273${HASH}`)));
+assert.ok(imageAllowed(new URL('https://scannables.scdn.co/uri/plain/png/ffffff/black/640/spotify:album:4aawyAB9vmqN3uQ7FjRGTy')));
+assert.ok(!imageAllowed(new URL('https://evil.example.com/image/x')));
+assert.ok(!imageAllowed(new URL('https://spotifycdn.com.evil.com/image/x')));
+assert.ok(!imageAllowed(new URL('http://i.scdn.co/image/x')));
+const w = withProxyCover({ cover: `https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e02${HASH}` });
+assert.ok(w.coverUrl.startsWith('api/img?u=') && w.coverAltUrl.startsWith('api/img?u='));
+console.log('cover tests passed');

@@ -678,9 +678,12 @@ a.btn { color: inherit; display: inline-block; }
 
   async function applyAlbumData(data, keepStyle) {
     var img = null, coverFailed = false;
-    if (data.coverUrl) {
-      try { img = await loadImage(data.coverUrl); } catch (e) { coverFailed = true; }
+    var tries = [data.coverUrl, data.coverAltUrl].filter(Boolean);
+    for (var t = 0; t < tries.length && !img; t++) {
+      try { img = await loadImage(tries[t]); } catch (e) { /* try the next one */ }
     }
+    if (tries.length && !img) coverFailed = true;
+    if (!tries.length) coverFailed = true;
     album = { id: data.id, title: data.title || '', artist: data.artist || '', year: data.year || '', tracks: data.tracks || [],
       img: img, palette: [], sample: false, coverUrl: data.coverUrl || null, customCover: false };
     afterAlbumChange(!keepStyle);
